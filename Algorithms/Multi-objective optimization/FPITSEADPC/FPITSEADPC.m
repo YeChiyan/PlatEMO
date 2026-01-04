@@ -7,7 +7,7 @@ classdef FPITSEADPC < ALGORITHM
     methods
         function main(Algorithm,Problem)
             %% Parameter Setting
-            [p, fi] = Algorithm.ParameterSet(0.25, 0.1);
+            [p, fi] = Algorithm.ParameterSet(0.25, 0.08);
             
             %% Generate random population
             N = Problem.N;

@@ -5,7 +5,7 @@ clear; clc;
 algName  = 'FPITSEADPC'; % 算法名称 (指向 Algorithms 文件夹中的类)
 probName = 'MMF8';    % 目标函数名称
 popSize  = 200;
-maxFE    = popSize * 100;
+maxFE    = popSize * 200;
 savePts  = 20;
 
 % 动画速度
@@ -65,6 +65,31 @@ for i = 1 : numStages
     decs = popObj.decs;
     
     objs = popObj.objs;
+    
+    % --- 计算指标 (IGD & IGDX) ---
+    currentIGD  = NaN;
+    currentIGDX = NaN;
+    if ~isempty(proObject)
+        % 计算 IGD (目标空间)
+        PF_ref = [];
+        if ~isempty(proObject.PF); PF_ref = proObject.PF;
+        elseif ~isempty(proObject.optimum); PF_ref = proObject.optimum; end
+        
+        if ~isempty(PF_ref) && ismatrix(PF_ref) && size(PF_ref, 2) == size(objs, 2)
+            dists = pdist2(PF_ref, objs);
+            currentIGD = mean(min(dists, [], 2));
+        end
+        
+        % 计算 IGDX (决策空间)
+        POS_ref = [];
+        if isprop(proObject, 'POS') && ~isempty(proObject.POS); POS_ref = proObject.POS; end
+        
+        if ~isempty(POS_ref) && ismatrix(POS_ref) && size(POS_ref, 2) == size(decs, 2)
+            distsX = pdist2(POS_ref, decs);
+            currentIGDX = mean(min(distsX, [], 2));
+        end
+    end
+    
     % --- 左：目标空间 (PF) ---
     subplot(1, 2, 1); cla; hold on;
     % 绘制参考 PF (蓝色空心点 - True PF)
@@ -78,7 +103,9 @@ for i = 1 : numStages
     % 绘制当前种群 (红色空心点 - Obtained PF)
     scatter(objs(:, 1), objs(:, 2), 15, 'r');
     xlabel('f1'); ylabel('f2');
-    title(sprintf('%s (PF) | 进度: %.0f%%', probName, progress*100));
+    titleStr = sprintf('%s (PF) | 进度: %.0f%%', probName, progress*100);
+    if ~isnan(currentIGD); titleStr = sprintf('%s\nIGD: %.4f', titleStr, currentIGD); end
+    title(titleStr);
     grid on; axis square; hold off;
     
     % --- 右：决策空间 (PS) ---
@@ -94,7 +121,9 @@ for i = 1 : numStages
         xlim([lb(1), ub(1)]); ylim([lb(2), ub(2)]);
     end
     xlabel('x1'); ylabel('x2');
-    title(sprintf('%s (PS) | FE: %d', probName, currentFE));
+    titleStrX = sprintf('%s (PS) | FE: %d', probName, currentFE);
+    if ~isnan(currentIGDX); titleStrX = sprintf('%s\nIGDX: %.4f', titleStrX, currentIGDX); end
+    title(titleStrX);
     grid on; axis square;
     drawnow;
     
