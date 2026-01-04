@@ -2,7 +2,7 @@
 clear; clc;
 
 %% 1. 参数设置区域
-algName  = 'FPITSEADPC'; % 算法名称 (指向 Algorithms 文件夹中的类)
+algName  = 'FPITSEADPCAWARE'; % 算法名称 (指向 Algorithms 文件夹中的类)
 probName = 'MMF8';    % 目标函数名称
 popSize  = 200;
 maxFE    = popSize * 100;
