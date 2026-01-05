@@ -1,9 +1,9 @@
-%% FPITSEA-HA DPC 历史档案 算法演化过程展示脚本
+%% FPITSEA-HA- DPC 历史档案 算法演化过程展示脚本
 clear; clc;
 %% 含义
 %% 1. 参数设置区域
 algName  = 'FPITSEAHA'; % 算法名称 (指向 Algorithms 文件夹中的类)
-probName = 'MMF6';    % 目标函数名称
+probName = 'MMF12';    % 目标函数名称
 popSize  = 400;
 iters =100;
 maxFE    = popSize * iters;
@@ -55,14 +55,21 @@ else
 end
 
 %% 4. 动态展示演化动画
-fig = figure('Color', 'w', 'Name', ['Testing ' algName], 'Position', [100 100 1100 450]);
+%% 4. 动态展示演化动画 (四宫格：PF, PS, IGD, IGDX)
+fig = figure('Color', 'w', 'Name', ['Testing ' algName], 'Position', [100 100 1000 800]);
 
 numStages = size(result, 1);
+igdHistory  = zeros(1, numStages);
+igdxHistory = zeros(1, numStages);
+feHistory   = zeros(1, numStages);
+iterHistory = zeros(1, numStages);
+
 for i = 1 : numStages    % 获取当前代数据
     currentFE = result{i, 1};
     objs      = result{i, 2}.objs;
     decs      = result{i, 2}.decs;
     progress  = currentFE / maxFE;
+    feHistory(i) = currentFE;
     
     % --- 计算指标 ---
     currentIGD = NaN; currentIGDX = NaN;
@@ -87,9 +94,21 @@ for i = 1 : numStages    % 获取当前代数据
         end
     end
     
+    igdHistory(i)  = currentIGD;
+    igdxHistory(i) = currentIGDX;
+    iterHistory(i) = currentFE / popSize;
+    
     clf(fig);
-    % --- 左：目标空间 (PF) ---
-    ax1 = subplot(1, 2, 1);
+    % --- 顶部信息行 ---
+    currentTime = datestr(now, 'mm-dd-HHMM');
+    headerStr = sprintf('Algorithm: %s | Problem: %s | PopSize: %d | MaxIter: %d | Time: %s', ...
+        algName, probName, popSize, iters, currentTime);
+    annotation('textbox', [0.1, 0.94, 0.8, 0.05], 'String', headerStr, ...
+        'EdgeColor', 'none', 'HorizontalAlignment', 'center', 'FontSize', 12, 'FontWeight', 'bold');
+    
+    % --- (1) 左上：目标空间 (PF) ---
+    ax1 = subplot(2, 2, 1);
+    ax1.Position(2) = ax1.Position(2) - 0.05; % 下移一点给 header 留空间
     hold(ax1, 'on');
     
     % 绘制参考 PF (蓝色小点)
@@ -117,11 +136,14 @@ for i = 1 : numStages    % 获取当前代数据
         view(ax1, [45, 20]);
     end
     grid(ax1, 'on'); axis(ax1, 'square');
-    legend(ax1, [h_pf_true, h_pf_obs], {'True PF', 'Obtained PF'}, 'Location', 'best');
-    title(ax1, sprintf('%s (PF) | FE: %d | IGD: %.4f', probName, currentFE, currentIGD));
+    if ~isempty(h_pf_true) && ~isempty(h_pf_obs)
+        legend(ax1, [h_pf_true, h_pf_obs], {'True PF', 'Obtained PF'}, 'Location', 'best');
+    end
+    title(ax1, sprintf('Objective Space (PF) | FE: %d', currentFE));
     
-    % --- 右：决策空间 (PS) ---
-    ax2 = subplot(1, 2, 2);
+    % --- (2) 右上：决策空间 (PS) ---
+    ax2 = subplot(2, 2, 2);
+    ax2.Position(2) = ax2.Position(2) - 0.05;
     hold(ax2, 'on');
     
     % 绘制参考 PS (淡蓝色小点)
@@ -144,15 +166,27 @@ for i = 1 : numStages    % 获取当前代数据
         view(ax2, [45, 20]);
     end
     grid(ax2, 'on'); axis(ax2, 'square');
-    legend(ax2, [h_ps_true, h_ps_obs], {'True PS', 'Obtained PS'}, 'Location', 'best');
-    title(ax2, sprintf('PS Space (IGDX: %.4f)', currentIGDX));
+    if ~isempty(h_ps_true) && ~isempty(h_ps_obs)
+        legend(ax2, [h_ps_true, h_ps_obs], {'True PS', 'Obtained PS'}, 'Location', 'best');
+    end
+    title(ax2, 'Decision Space (PS)');
     
-    % --- 底部标题 ---
-    annotation('textbox', [0.4, 0.01, 0.2, 0.08], 'String', ['(h) ' algName], ...
-        'EdgeColor', 'none', 'HorizontalAlignment', 'center', 'FontSize', 14, 'FontWeight', 'bold');
+    % --- (3) 左下：IGD 收敛曲线 ---
+    ax3 = subplot(2, 2, 3);
+    plot(ax3, iterHistory(1:i), igdHistory(1:i), '-b.', 'LineWidth', 1.2);
+    grid(ax3, 'on');
+    xlabel(ax3, 'Iterations'); ylabel(ax3, 'IGD');
+    title(ax3, sprintf('IGD: %.4f', currentIGD));
+    
+    % --- (4) 右下：IGDX 收敛曲线 ---
+    ax4 = subplot(2, 2, 4);
+    plot(ax4, iterHistory(1:i), igdxHistory(1:i), '-r.', 'LineWidth', 1.2);
+    grid(ax4, 'on');
+    xlabel(ax4, 'Iterations'); ylabel(ax4, 'IGDX');
+    title(ax4, sprintf('IGDX: %.4f', currentIGDX));
     
     drawnow;
-    if progress > 0.7; pause(slowDelay); else; pause(baseDelay); end
+    if progress > 0.8; pause(slowDelay); else; pause(baseDelay); end
 end
 
 %% 5. 保存图像

@@ -3,7 +3,7 @@ clear; clc;
 
 %% 1. 参数设置区域
 algName  = 'FPITSEA'; % 算法名称 (指向 Algorithms 文件夹中的类)
-probName = 'MMF5';    % 目标函数名称
+probName = 'MMF12';    % 目标函数名称
 popSize  = 400;
 maxFE    = popSize * 100;
 savePts  = 20;
