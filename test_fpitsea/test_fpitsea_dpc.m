@@ -2,10 +2,10 @@
 clear; clc;
 
 %% 1. 参数设置区域
-algName  = 'FPITSEA'; % 算法名称 (指向 Algorithms 文件夹中的类)
-probName = 'MMF5';    % 目标函数名称
+algName  = 'FPITSEADPC'; % 算法名称 (指向 Algorithms 文件夹中的类)
+probName = 'MMF12';    % 目标函数名称
 popSize  = 400;
-maxFE    = popSize * 00;
+maxFE    = popSize * 100;
 savePts  = 20;
 
 % 动画速度
@@ -94,27 +94,15 @@ for i = 1 : numStages
     subplot(1, 2, 1); cla; hold on;
     % 绘制参考 PF (蓝色空心点 - True PF)
     if ~isempty(proObject)
-        PF_ref = [];
-        if ~isempty(proObject.PF); PF_ref = proObject.PF;
-        elseif ~isempty(proObject.optimum); PF_ref = proObject.optimum; end
-        
-        if ~isempty(PF_ref)
-            if size(PF_ref, 2) == 2
-                scatter(PF_ref(:, 1), PF_ref(:, 2), 10, 'b');
-            elseif size(PF_ref, 2) == 3
-                scatter3(PF_ref(:, 1), PF_ref(:, 2), PF_ref(:, 3), 10, 'b');
-            end
+        if ~isempty(proObject.PF) && ismatrix(proObject.PF) && size(proObject.PF, 2) == 2
+            scatter(proObject.PF(:, 1), proObject.PF(:, 2), 10, 'b');
+        elseif ~isempty(proObject.optimum) && ismatrix(proObject.optimum) && size(proObject.optimum, 2) == 2
+            scatter(proObject.optimum(:, 1), proObject.optimum(:, 2), 10, 'b');
         end
     end
     % 绘制当前种群 (红色空心点 - Obtained PF)
-    if size(objs, 2) == 2
-        scatter(objs(:, 1), objs(:, 2), 15, 'r');
-        xlabel('f1'); ylabel('f2');
-    elseif size(objs, 2) == 3
-        scatter3(objs(:, 1), objs(:, 2), objs(:, 3), 15, 'r');
-        xlabel('f1'); ylabel('f2'); zlabel('f3');
-        view(3);
-    end
+    scatter(objs(:, 1), objs(:, 2), 15, 'r');
+    xlabel('f1'); ylabel('f2');
     titleStr = sprintf('%s (PF) | 进度: %.0f%%', probName, progress*100);
     if ~isnan(currentIGD); titleStr = sprintf('%s\nIGD: %.4f', titleStr, currentIGD); end
     title(titleStr);
@@ -123,29 +111,16 @@ for i = 1 : numStages
     % --- 右：决策空间 (PS) ---
     subplot(1, 2, 2); cla; hold on;
     if ~isempty(proObject) && isprop(proObject, 'POS') && ~isempty(proObject.POS)
-        % 绘制参考 PS (淡蓝色小点 - True PS)
-        if size(proObject.POS, 2) == 2
-            scatter(proObject.POS(:, 1), proObject.POS(:, 2), 2, [0.7 0.8 1]);
-        elseif size(proObject.POS, 2) == 3
-            scatter3(proObject.POS(:, 1), proObject.POS(:, 2), proObject.POS(:, 3), 2, [0.7 0.8 1]);
-        end
+        % 绘制参考 PS (蓝色小点 - True PS)
+        scatter(proObject.POS(:, 1), proObject.POS(:, 2), 2, 'b');
     end
-    % 绘制当前种群 (红色点 - Obtained PS)
-    if size(decs, 2) == 2
-        scatter(decs(:, 1), decs(:, 2), 25, 'r');
-        if ~isempty(lb) && length(lb) >= 2
-            xlim([lb(1), ub(1)]); ylim([lb(2), ub(2)]);
-        end
-        xlabel('x1'); ylabel('x2');
-    elseif size(decs, 2) == 3
-        scatter3(decs(:, 1), decs(:, 2), decs(:, 3), 25, 'r');
-        if ~isempty(lb) && length(lb) >= 3
-            xlim([lb(1), ub(1)]); ylim([lb(2), ub(2)]); zlim([lb(3), ub(3)]);
-        end
-        xlabel('x1'); ylabel('x2'); zlabel('x3');
-        view(3);
-    end
+    % 绘制当前种群 (红色空心点 - Obtained PS)
+    scatter(decs(:, 1), decs(:, 2), 15, 'r');
     
+    if ~isempty(lb) && length(lb) >= 2
+        xlim([lb(1), ub(1)]); ylim([lb(2), ub(2)]);
+    end
+    xlabel('x1'); ylabel('x2');
     titleStrX = sprintf('%s (PS) | FE: %d', probName, currentFE);
     if ~isnan(currentIGDX); titleStrX = sprintf('%s\nIGDX: %.4f', titleStrX, currentIGDX); end
     title(titleStrX);
