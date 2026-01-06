@@ -4,10 +4,13 @@ clear; clc;
 %% 1. 参数设置区域
 algName  = 'FPITSEAHA'; % 算法名称 (指向 Algorithms 文件夹中的类)
 probName = 'MMF10';    % 目标函数名称
-popSize  = 400;
+popSize  = 200;
 iters =100;
 maxFE    = popSize * iters;
 savePts  = 20;
+
+str='引入DE算子';
+
 
 % 动画速度
 baseDelay = 0.2;
@@ -107,9 +110,9 @@ for i = 1 : numStages    % 获取当前代数据
     clf(fig);
     % --- 顶部信息行 ---
     currentTime = datestr(now, 'mm-dd-HHMM');
-    headerStr = sprintf('Algorithm: %s | Problem: %s | PopSize: %d | MaxIter: %d | Time: %s', ...
-        algName, probName, popSize, iters, currentTime);
-    annotation('textbox', [0.1, 0.94, 0.8, 0.05], 'String', headerStr, ...
+    headerStr = {sprintf('Algorithm: %s | Problem: %s | PopSize: %d | MaxIter: %d | Time: %s', ...
+        algName, probName, popSize, iters, currentTime), str};
+    annotation('textbox', [0.1, 0.92, 0.8, 0.07], 'String', headerStr, ...
         'EdgeColor', 'none', 'HorizontalAlignment', 'center', 'FontSize', 12, 'FontWeight', 'bold');
     
     % --- (1) 左上：目标空间 (PF) ---
