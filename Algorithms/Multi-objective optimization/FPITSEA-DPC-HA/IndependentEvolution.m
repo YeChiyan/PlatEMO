@@ -48,36 +48,63 @@ end
 %% ================== 核心修改区域：全局竞争选择 ==================
 
 function Pop = EnvironmentalSelectionS2(lpop,N)
-% Environmental Selection S2: Global Competition Strategy
-% 汇聚所有子种群 -> 全局非支配排序 -> IDSS 筛选
+% Modified: Local Elitism + Global IDSS
+% 专门修复 MMF10-16 丢失局部 PS 的问题
 
-%% 1. 汇聚所有解 (Merge)
-AllPop = [];
+ndpop = []; % 存放第一梯队（每个子种群的精英）
+dpop = [];  % 存放备胎（每个子种群的普通成员）
+
+%% 1. 组内独立排序 (Intra-Cluster Sorting)
+% 核心：只要你是子种群的老大，哪怕被全局支配，也先把你保下来
 for i = 1:length(lpop)
-    AllPop = [AllPop, lpop{i}];
+    cpop = lpop{i};
+    if isempty(cpop)
+        continue;
+    end
+    
+    % [关键修改] 只在 cpop 内部进行排序，不看全局
+    [FNo1, ~] = NDSort(cpop.objs, length(cpop));
+    
+    % 收集该子种群的 Rank 1
+    local_elites = cpop(FNo1 == 1);
+    ndpop = [ndpop, local_elites];
+    
+    % 收集该子种群的 Rank > 1
+    others = cpop(FNo1 ~= 1);
+    dpop = [dpop, others];
 end
 
-if isempty(AllPop)
-    Pop = [];
+%% 2. 溢出处理与补充
+% 情况 A：精英太多 (> N) -> 需要内卷
+if length(ndpop) > N
+    % 使用 IDSS 从精英中筛选。
+    % IDSS 会倾向于保留决策空间距离远的点，从而保护 Local PS
+    Pop = IDSS(ndpop, N);
     return;
 end
 
-%% 2. 全局非支配排序 (Global Non-dominated Sorting)
-% 这一步是杀手锏。那些“半吊子”离群点在这里会被判定为高层级(Rank high)，
-% 从而被 MaxFNo 挡在门外，直接淘汰。
-[FrontNo, MaxFNo] = NDSort(AllPop.objs, N);
-
-% 只保留前几层的优良解
-Next = FrontNo <= MaxFNo;
-CandidatePop = AllPop(Next);
-
-%% 3. 基于 IDSS 的最终筛选 (IDSS Selection)
-% 如果优良解数量 <= N，直接全收
-if length(CandidatePop) <= N
-    Pop = CandidatePop;
-else
-    % 如果优良解 > N，使用 IDSS 从中挑选分布最好的 N 个
-    % IDSS 会平衡决策空间和目标空间的分布，确保局部最优和全局最优都能保留
-    Pop = IDSS(CandidatePop, N);
+% 情况 B：精英太少 (< N) -> 需要从备胎里补
+% 此时，为了保证补充进来的解质量不要太差，我们在备胎池里做一次全局排序
+if length(ndpop) < N && ~isempty(dpop)
+    [FNo2, MaxFNo2] = NDSort(dpop.objs, length(dpop));
+    k = 1;
+    while length(ndpop) < N && k <= MaxFNo2
+        % 这一步是从备胎里选，按全局 Rank 选比较安全
+        candidates = dpop(FNo2 == k);
+        
+        % 如果这一层加进去不超标，全加
+        if length(ndpop) + length(candidates) <= N
+            ndpop = [ndpop, candidates];
+        else
+            % 如果超标，用 IDSS 选最好的几个填满
+            needed = N - length(ndpop);
+            selected = IDSS(candidates, needed);
+            ndpop = [ndpop, selected];
+            break;
+        end
+        k = k + 1;
+    end
 end
+
+Pop = ndpop;
 end

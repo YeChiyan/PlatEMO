@@ -1,12 +1,11 @@
 function [cluster, dc] = DPC(Pop, fi)
-% Output:
-%   cluster: cell array of indices
-%   dc: cutoff distance used (Added return value)
+% Standard Physical DPC
+% 回归纯物理距离，不依赖 Fitness，确保物理上分离的区域能被切开
 
 Data = Pop.decs;
 [N, ~] = size(Data);
 
-%% 1. 计算距离矩阵
+%% 1. 计算距离
 Dist = pdist2(Data, Data);
 
 %% 2. 计算截断距离 dc
@@ -26,10 +25,13 @@ else
     dc = all_dists(percentile_idx);
 end
 
-%% 3. 计算局部密度 Rho
+%% 3. 计算局部密度 Rho (物理密度)
+% 使用高斯核
 Rho = sum(exp(-(Dist./dc).^2), 2) - 1;
 
-%% 4. 计算相对距离 Delta
+%% 4. 计算相对距离 Delta (物理距离)
+% Delta: 离"密度比我大"的点的最近距离
+% 注意：这里不再看 Fitness，只看物理聚集程度
 Delta = zeros(N, 1);
 [~, ord] = sort(Rho, 'descend');
 
@@ -41,17 +43,21 @@ for i = 2:N
     Delta(current_idx) = min(Dist(current_idx, higher_density_indices));
 end
 
-%% 5. 确定聚类中心
+%% 5. 确定聚类中心 (关键修改：降低门槛)
 Gamma = Rho .* Delta;
-threshold = mean(Gamma) + 2.0 * std(Gamma);
+
+% 对于多模态问题，宁可多选几个中心(多切分)，不能漏选
+threshold = mean(Gamma) + 1.5 * std(Gamma);
+
 center_indices = find(Gamma > threshold);
 
+% 兜底：如果没选出来，或者只选了1个但其实应该有多个
 if isempty(center_indices)
     [~, max_idx] = max(Gamma);
     center_indices = max_idx;
 end
 
-%% 6. 分配剩余点
+%% 6. 分配 (Assignment)
 labels = zeros(N, 1);
 num_clusters = length(center_indices);
 

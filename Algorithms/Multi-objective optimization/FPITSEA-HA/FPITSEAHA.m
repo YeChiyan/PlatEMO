@@ -27,7 +27,7 @@ classdef FPITSEAHA < ALGORITHM
                     [Population,CD] = EnvironmentalSelectionS1(Union,N);
                 else
                     %% The second stage of evolution (Local Mining with DPC)
-                    Population = IndependentEvolution(Problem,Population,Archive,N,fi);
+                    Population = IndependentEvolution(Problem,Population,N,fi);
                 end
                 
                 %% [新增] 每一代结束后，更新档案

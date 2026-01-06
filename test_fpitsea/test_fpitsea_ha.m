@@ -3,9 +3,9 @@ clear; clc;
 %% 含义
 %% 1. 参数设置区域
 algName  = 'FPITSEAHA'; % 算法名称 (指向 Algorithms 文件夹中的类)
-probName = 'MMF12';    % 目标函数名称
-popSize  = 400;
-iters =100;
+probName = 'MMF10';    % 目标函数名称
+popSize  = 600;
+iters =200;
 maxFE    = popSize * iters;
 savePts  = 20;
 
@@ -31,7 +31,13 @@ if isempty(files); error('未找到结果文件。'); end
 dataFileName = files(idx(1)).name;
 dataFolder   = files(idx(1)).folder;
 fullDataPath = fullfile(dataFolder, dataFileName);
-fprintf('加载数据：%s\n', dataFileName);
+
+% 提取文件名中的序号 (例如从 ..._8.mat 提取 8)
+[~, nameOnly, ~] = fileparts(dataFileName);
+nameTokens = split(nameOnly, '_');
+fileIdxStr = nameTokens{end};
+
+fprintf('加载数据：%s (序号: %s)\n', dataFileName, fileIdxStr);
 load(fullDataPath);
 
 %% 3. 获取问题对象与参考数据 (PS 和 PF)
@@ -198,9 +204,9 @@ if ~isempty(proObject)
 end
 
 
-% 构造符合要求的文件名：算法名称小写_problem名称_M2_D2_pop 种群大小_迭代次数
-imgFileName = sprintf('%s_%s_M%d_D%d_pop%d_%d.png', ...
-    lower(algName), lower(probName), M_val, D_val, popSize, iters);
+% 构造符合要求的文件名：算法名称小写_problem名称_M2_D2_pop 种群大小_迭代次数_序号
+imgFileName = sprintf('%s_%s_M%d_D%d_pop%d_%d_%s.png', ...
+    lower(algName), lower(probName), M_val, D_val, popSize, iters, fileIdxStr);
 
 imgSavePath = fullfile(dataFolder, imgFileName);
 saveas(gcf, imgSavePath);
