@@ -1,11 +1,12 @@
 %% HREA 算法演化过程展示脚本
 clear; clc;
-
+%% 含义
 %% 1. 参数设置区域
 algName  = 'HREA'; % 算法名称 (指向 Algorithms 文件夹中的类)
-probName = 'MMF16_l3';    % 目标函数名称
-popSize  =600;
-maxFE    = popSize * 100;
+probName = 'MMF10';    % 目标函数名称
+popSize  = 400;
+iters =100;
+maxFE    = popSize * iters;
 savePts  = 20;
 
 % 动画速度
@@ -30,7 +31,13 @@ if isempty(files); error('未找到结果文件。'); end
 dataFileName = files(idx(1)).name;
 dataFolder   = files(idx(1)).folder;
 fullDataPath = fullfile(dataFolder, dataFileName);
-fprintf('加载数据：%s\n', dataFileName);
+
+% 提取文件名中的序号 (例如从 ..._8.mat 提取 8)
+[~, nameOnly, ~] = fileparts(dataFileName);
+nameTokens = split(nameOnly, '_');
+fileIdxStr = nameTokens{end};
+
+fprintf('加载数据：%s (序号: %s)\n', dataFileName, fileIdxStr);
 load(fullDataPath);
 
 %% 3. 获取问题对象与参考数据 (PS 和 PF)
@@ -54,21 +61,24 @@ else
 end
 
 %% 4. 动态展示演化动画
-fig = figure('Color', 'w', 'Name', ['Testing ' algName], 'Position', [100 100 1100 450]);
+%% 4. 动态展示演化动画 (四宫格：PF, PS, IGD, IGDX)
+fig = figure('Color', 'w', 'Name', ['Testing ' algName], 'Position', [100 100 1000 800]);
 
 numStages = size(result, 1);
-for i = 1 : numStages
+igdHistory  = zeros(1, numStages);
+igdxHistory = zeros(1, numStages);
+feHistory   = zeros(1, numStages);
+iterHistory = zeros(1, numStages);
+
+for i = 1 : numStages    % 获取当前代数据
     currentFE = result{i, 1};
-    popObj    = result{i, 2};
-    progress  = i / numStages;
+    objs      = result{i, 2}.objs;
+    decs      = result{i, 2}.decs;
+    progress  = currentFE / maxFE;
+    feHistory(i) = currentFE;
     
-    decs = popObj.decs;
-    
-    objs = popObj.objs;
-    
-    % --- 计算指标 (IGD & IGDX) ---
-    currentIGD  = NaN;
-    currentIGDX = NaN;
+    % --- 计算指标 ---
+    currentIGD = NaN; currentIGDX = NaN;
     if ~isempty(proObject)
         % 计算 IGD (目标空间)
         PF_ref = [];
@@ -90,73 +100,116 @@ for i = 1 : numStages
         end
     end
     
-    % --- 左：目标空间 (PF) ---
-    subplot(1, 2, 1); cla; hold on;
-    % 绘制参考 PF (蓝色空心点 - True PF)
+    igdHistory(i)  = currentIGD;
+    igdxHistory(i) = currentIGDX;
+    iterHistory(i) = currentFE / popSize;
+    
+    clf(fig);
+    % --- 顶部信息行 ---
+    currentTime = datestr(now, 'mm-dd-HHMM');
+    headerStr = sprintf('Algorithm: %s | Problem: %s | PopSize: %d | MaxIter: %d | Time: %s', ...
+        algName, probName, popSize, iters, currentTime);
+    annotation('textbox', [0.1, 0.94, 0.8, 0.05], 'String', headerStr, ...
+        'EdgeColor', 'none', 'HorizontalAlignment', 'center', 'FontSize', 12, 'FontWeight', 'bold');
+    
+    % --- (1) 左上：目标空间 (PF) ---
+    ax1 = subplot(2, 2, 1);
+    ax1.Position(2) = ax1.Position(2) - 0.05; % 下移一点给 header 留空间
+    hold(ax1, 'on');
+    
+    % 绘制参考 PF (蓝色小点)
+    h_pf_true = [];
     if ~isempty(proObject)
         PF_ref = [];
         if ~isempty(proObject.PF); PF_ref = proObject.PF;
         elseif ~isempty(proObject.optimum); PF_ref = proObject.optimum; end
-        
         if ~isempty(PF_ref)
             if size(PF_ref, 2) == 2
-                scatter(PF_ref(:, 1), PF_ref(:, 2), 10, 'b');
+                h_pf_true = scatter(ax1, PF_ref(:, 1), PF_ref(:, 2), 5, [0.4 0.7 1], '.');
             elseif size(PF_ref, 2) == 3
-                scatter3(PF_ref(:, 1), PF_ref(:, 2), PF_ref(:, 3), 10, 'b');
+                h_pf_true = scatter3(ax1, PF_ref(:, 1), PF_ref(:, 2), PF_ref(:, 3), 5, [0.4 0.7 1], '.');
             end
         end
     end
-    % 绘制当前种群 (红色空心点 - Obtained PF)
+    % 绘制获得 PF (红色空心圆)
+    h_pf_obs = [];
     if size(objs, 2) == 2
-        scatter(objs(:, 1), objs(:, 2), 15, 'r');
-        xlabel('f1'); ylabel('f2');
+        h_pf_obs = scatter(ax1, objs(:, 1), objs(:, 2), 20, 'r', 'o');
+        xlabel(ax1, 'f_1'); ylabel(ax1, 'f_2');
     elseif size(objs, 2) == 3
-        scatter3(objs(:, 1), objs(:, 2), objs(:, 3), 15, 'r');
-        xlabel('f1'); ylabel('f2'); zlabel('f3');
-        view(3);
+        h_pf_obs = scatter3(ax1, objs(:, 1), objs(:, 2), objs(:, 3), 20, 'r', 'o');
+        xlabel(ax1, 'f_1'); ylabel(ax1, 'f_2'); zlabel(ax1, 'f_3');
+        view(ax1, [45, 20]);
     end
-    titleStr = sprintf('%s (PF) | 进度: %.0f%%', probName, progress*100);
-    if ~isnan(currentIGD); titleStr = sprintf('%s\nIGD: %.4f', titleStr, currentIGD); end
-    title(titleStr);
-    grid on; axis square; hold off;
+    grid(ax1, 'on'); axis(ax1, 'square');
+    if ~isempty(h_pf_true) && ~isempty(h_pf_obs)
+        legend(ax1, [h_pf_true, h_pf_obs], {'True PF', 'Obtained PF'}, 'Location', 'best');
+    end
+    title(ax1, sprintf('Objective Space (PF) | FE: %d', currentFE));
     
-    % --- 右：决策空间 (PS) ---
-    subplot(1, 2, 2); cla; hold on;
+    % --- (2) 右上：决策空间 (PS) ---
+    ax2 = subplot(2, 2, 2);
+    ax2.Position(2) = ax2.Position(2) - 0.05;
+    hold(ax2, 'on');
+    
+    % 绘制参考 PS (淡蓝色小点)
+    h_ps_true = [];
     if ~isempty(proObject) && isprop(proObject, 'POS') && ~isempty(proObject.POS)
-        % 绘制参考 PS (淡蓝色小点 - True PS)
         if size(proObject.POS, 2) == 2
-            scatter(proObject.POS(:, 1), proObject.POS(:, 2), 2, [0.7 0.8 1]);
+            h_ps_true = scatter(ax2, proObject.POS(:, 1), proObject.POS(:, 2), 2, [0.6 0.8 1], '.');
         elseif size(proObject.POS, 2) == 3
-            scatter3(proObject.POS(:, 1), proObject.POS(:, 2), proObject.POS(:, 3), 2, [0.7 0.8 1]);
+            h_ps_true = scatter3(ax2, proObject.POS(:, 1), proObject.POS(:, 2), proObject.POS(:, 3), 2, [0.6 0.8 1], '.');
         end
     end
-    % 绘制当前种群 (红色点 - Obtained PS)
+    % 绘制获得 PS (红色空心圆)
+    h_ps_obs = [];
     if size(decs, 2) == 2
-        scatter(decs(:, 1), decs(:, 2), 25, 'r');
-        if ~isempty(lb) && length(lb) >= 2
-            xlim([lb(1), ub(1)]); ylim([lb(2), ub(2)]);
-        end
-        xlabel('x1'); ylabel('x2');
+        h_ps_obs = scatter(ax2, decs(:, 1), decs(:, 2), 15, 'r', 'o');
+        xlabel(ax2, 'x_1'); ylabel(ax2, 'x_2');
     elseif size(decs, 2) == 3
-        scatter3(decs(:, 1), decs(:, 2), decs(:, 3), 25, 'r');
-        if ~isempty(lb) && length(lb) >= 3
-            xlim([lb(1), ub(1)]); ylim([lb(2), ub(2)]); zlim([lb(3), ub(3)]);
-        end
-        xlabel('x1'); ylabel('x2'); zlabel('x3');
-        view(3);
+        h_ps_obs = scatter3(ax2, decs(:, 1), decs(:, 2), decs(:, 3), 15, 'r', 'o');
+        xlabel(ax2, 'x_1'); ylabel(ax2, 'x_2'); zlabel(ax2, 'x_3');
+        view(ax2, [45, 20]);
     end
+    grid(ax2, 'on'); axis(ax2, 'square');
+    if ~isempty(h_ps_true) && ~isempty(h_ps_obs)
+        legend(ax2, [h_ps_true, h_ps_obs], {'True PS', 'Obtained PS'}, 'Location', 'best');
+    end
+    title(ax2, 'Decision Space (PS)');
     
-    titleStrX = sprintf('%s (PS) | FE: %d', probName, currentFE);
-    if ~isnan(currentIGDX); titleStrX = sprintf('%s\nIGDX: %.4f', titleStrX, currentIGDX); end
-    title(titleStrX);
-    grid on; axis square;
+    % --- (3) 左下：IGD 收敛曲线 ---
+    ax3 = subplot(2, 2, 3);
+    plot(ax3, iterHistory(1:i), igdHistory(1:i), '-b.', 'LineWidth', 1.2);
+    grid(ax3, 'on');
+    xlabel(ax3, 'Iterations'); ylabel(ax3, 'IGD');
+    title(ax3, sprintf('IGD: %.4f', currentIGD));
+    
+    % --- (4) 右下：IGDX 收敛曲线 ---
+    ax4 = subplot(2, 2, 4);
+    plot(ax4, iterHistory(1:i), igdxHistory(1:i), '-r.', 'LineWidth', 1.2);
+    grid(ax4, 'on');
+    xlabel(ax4, 'Iterations'); ylabel(ax4, 'IGDX');
+    title(ax4, sprintf('IGDX: %.4f', currentIGDX));
+    
     drawnow;
-    
-    if progress > 0.7; pause(slowDelay); else; pause(baseDelay); end
+    if progress > 0.8; pause(slowDelay); else; pause(baseDelay); end
 end
 
 %% 5. 保存图像
-imgFileName = strrep(dataFileName, '.mat', '_Plot.png');
+% 动态获取 M 和 D (默认为 2)
+M_val = 2; D_val = 2;
+if ~isempty(proObject)
+    M_val = proObject.M;
+    D_val = proObject.D;
+end
+
+
+% 构造符合要求的文件名：算法名称小写_problem名称_M2_D2_pop 种群大小_迭代次数_序号
+imgFileName = sprintf('%s_%s_M%d_D%d_pop%d_%d_%s.png', ...
+    lower(algName), lower(probName), M_val, D_val, popSize, iters, fileIdxStr);
+
 imgSavePath = fullfile(dataFolder, imgFileName);
 saveas(gcf, imgSavePath);
-fprintf('\n【保存成功】\n数据文件: %s\n图像文件: %s\n', fullDataPath, imgSavePath);
+fprintf('\n【可视化完成】\n数据: %s\n图像: %s\n', fullDataPath, imgSavePath);
+if ~isnan(currentIGD); fprintf('Final IGD: %.4f\n', currentIGD); end
+if ~isnan(currentIGDX); fprintf('Final IGDX: %.4f\n', currentIGDX); end
