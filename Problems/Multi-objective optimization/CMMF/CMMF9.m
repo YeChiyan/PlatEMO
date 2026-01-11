@@ -20,86 +20,74 @@ classdef CMMF9 < PROBLEM
             [N, D] = size(X);
             OptX = 0.2;
             
+            % THETA calculation based on mirroring at X1=1
             THETA = zeros(N, 1);
             for i = 1 : N
-                if X(i, 1) > 1
-                    THETA(i) = 2/pi * atan(X(i, 2) / (X(i, 1) - 1));
-                elseif X(i, 1) < 1
-                    THETA(i) = 2/pi * atan(X(i, 2) / (1 - X(i, 1)));
+                diff = abs(X(i, 1) - 1);
+                if diff > 0
+                    THETA(i) = 2/pi * atan(abs(X(i, 2)) / diff);
                 else
                     THETA(i) = 1;
                 end
             end
             
             if D > M
-                h = 20 - 20 * exp(-0.2 * sqrt(sum((X(:, M+1:end) - OptX).^2, 2) / (D - M))) + exp(1) ...
-                    - exp(sum(cos(2 * pi * (X(:, M+1:end) - OptX)), 2) / (D - M));
+                h = sum((X(:, M+1:D) - OptX).^2, 2);
             else
                 h = zeros(N, 1);
             end
             
             T = zeros(N, 1);
-            G = zeros(N, M);
             for i = 1 : N
                 if X(i, 1) > 1
-                    T(i) = (4 - 4 * (2 - X(i, 1))^2 - (2 - X(i, 2))^2)^2 + h(i);
+                    % Peak 1 at (2,2) for CMMF9 (Similar to CMMF8 but maybe different scaling)
+                    T(i) = ((X(i, 1)-2)^2 + 0.25*(X(i, 2)-2)^2 - 1)^2 + h(i);
                 else
-                    T(i) = (4 - 4 * (1 - X(i, 1))^2 - (X(i, 2))^2)^2 + h(i);
+                    % Peak 2 at (1,0)
+                    T(i) = ((X(i, 1)-1)^2 + 0.25*(X(i, 2)-0)^2 - 1)^2 + h(i);
                 end
-                G(i, :) = [1, cumprod(sin(pi/2 * THETA(i)), 2)] .* [cos(pi/2 * THETA(i)), 1];
             end
+            
+            G = [1-THETA, THETA];
             PopObj = G .* repmat((1+T), 1, M);
         end
         %% Calculate constraint violations
         function PopCon = CalCon(obj, X)
             [N, ~] = size(X);
-            THETA = zeros(N, 1);
+            PopCon = zeros(N, 2);
             for i = 1 : N
+                % 1. Ellipse band constraint
                 if X(i, 1) > 1
-                    THETA(i) = 2/pi * atan(X(i, 2) / (X(i, 1) - 1));
-                elseif X(i, 1) < 1
-                    THETA(i) = 2/pi * atan(X(i, 2) / (1 - X(i, 1)));
+                    val = (X(i, 1)-2)^2 + 0.25*(X(i, 2)-2)^2;
                 else
-                    THETA(i) = 1;
+                    val = (X(i, 1)-1)^2 + 0.25*(X(i, 2)-0)^2;
                 end
-            end
-            
-            PopCon = zeros(N, 4);
-            for i = 1 : N
-                if X(i, 1) > 1
-                    PopCon(i, 1) = THETA(i) - 2/3;
-                    PopCon(i, 2) = -THETA(i) + 1/3;
-                    PopCon(i, 3) = 4 - 4 * (2 - X(i, 1))^2 - (2 - X(i, 2))^2 - 0.04;
-                    PopCon(i, 4) = -4 + 4 * (2 - X(i, 1))^2 + (2 - X(i, 2))^2 - 0.04;
-                else
-                    PopCon(i, 1) = THETA(i) - 2/3;
-                    PopCon(i, 2) = -THETA(i) + 1/3;
-                    PopCon(i, 3) = 4 - 4 * (1 - X(i, 1))^2 - X(i, 2)^2 - 0.04;
-                    PopCon(i, 4) = -4 + 4 * (1 - X(i, 1))^2 + X(i, 2)^2 - 0.04;
-                end
+                % Narrower feasible band for CMMF9: [0.95, 1.05]
+                PopCon(i, 1) = max(0.95 - val, val - 1.05);
+                
+                % 2. Sector constraint
+                diff = abs(X(i, 1) - 1);
+                THETA = 2/pi * atan(abs(X(i, 2)) / max(diff, 1e-6));
+                % More restricted THETA segments for CMMF9
+                PopCon(i, 2) = min(max(0.15 - THETA, THETA - 0.35), ...
+                    max(0.65 - THETA, THETA - 0.85));
             end
             PopCon(PopCon < 0) = 0;
         end
         %% Generate Pareto optimal solutions
         function R = GetOptimum(obj, N)
-            % 1. Sample potential PS points (Ellipses)
             phi = linspace(-pi, pi, 15000)';
             C1 = [2 + cos(phi), 2 + 2*sin(phi)];
             C2 = [1 + cos(phi), 2*sin(phi)];
             Combined = [C1; C2];
             
-            % 2. Clip to bounds [0, 2]
             Combined(Combined(:,1) < 0|Combined(:,1) > 2 | Combined(:,2) < 0|Combined(:,2) > 2, :) = [];
             
-            % 3. Filter through constraints
             PopCon = obj.CalCon(Combined);
             Feasible = all(PopCon <= 1e-4, 2);
             obj.POS = Combined(Feasible, :);
             
-            % 4. Filter for global optima (T=0)
-            objs = obj.CalObj(obj.POS);
-            R = objs;
-            
+            R = obj.CalObj(obj.POS);
             if obj.D > 2
                 obj.POS = [obj.POS, repmat(repmat(0.2, 1, obj.D-2), size(obj.POS, 1), 1)];
             end

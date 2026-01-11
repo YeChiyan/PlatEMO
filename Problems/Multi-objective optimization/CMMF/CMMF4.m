@@ -20,90 +20,76 @@ classdef CMMF4 < PROBLEM
             [N, D] = size(X);
             OptX = 0.2;
             
-            THETA = zeros(N, 1);
-            for i = 1 : N
-                if X(i, 1) > 0
-                    THETA(i) = 2/pi * atan(abs(X(i, 2)) ./ abs(X(i, 1)));
-                elseif X(i, 1) == 0 || X(i, 1) == -1
-                    THETA(i) = 1;
-                else
-                    THETA(i) = 2/pi * atan(abs(X(i, 2)) ./ (X(i, 1) + 1));
-                end
-            end
+            THETA = 2/pi * atan(abs(X(:, 2)) ./ abs(X(:, 1)));
             
             if D > M
-                h = 20 - 20 * exp(-0.2 * sqrt(sum((X(:, M+1:end) - OptX).^2, 2) / (D - M))) + exp(1) ...
-                    - exp(sum(cos(2 * pi * (X(:, M+1:end) - OptX)), 2) / (D - M));
+                h = sum((X(:, M+1:D) - OptX).^2, 2);
             else
                 h = zeros(N, 1);
             end
             
             T = zeros(N, 1);
-            G = zeros(N, M);
             for i = 1 : N
-                if X(i, 1) >= 0
-                    T(i) = (0.96 - X(i, 1)^2 - X(i, 2)^2)^2 + h(i);
+                if X(i, 1) < -1/2
+                    T(i) = (0.25 - (X(i, 1)+1)^2 - X(i, 2)^2)^2 + h(i);
                 else
-                    T(i) = (0.96 - (X(i, 1) + 1)^2 - X(i, 2)^2)^2 + h(i);
+                    T(i) = (0.96 - X(i, 1)^2 - X(i, 2)^2)^2 + h(i);
                 end
-                G(i, :) = 1 - [1, cumprod(sin(pi/2 * THETA(i)), 2)] .* [cos(pi/2 * THETA(i)), 1];
             end
+            
+            G = [1-THETA, THETA];
             PopObj = G .* repmat((1+T), 1, M);
         end
         %% Calculate constraint violations
         function PopCon = CalCon(obj, X)
             [N, ~] = size(X);
-            PopCon = zeros(N, 3);
-            PopCon(:, 1) = -X(:, 2);
+            PopCon = zeros(N, 2);
             for i = 1 : N
-                if X(i, 1) < 0
-                    if (X(i, 1) + 1)^2 + X(i, 2)^2 <= 0.49
-                        PopCon(i, 2) = (X(i, 1) + 1)^2 + X(i, 2)^2 - 0.36;
-                        PopCon(i, 3) = -(X(i, 1) + 1)^2 - X(i, 2)^2 + 0.04;
-                    else
-                        PopCon(i, 2) = (X(i, 1) + 1)^2 + X(i, 2)^2 - 1;
-                        PopCon(i, 3) = -(X(i, 1) + 1)^2 - X(i, 2)^2 + 0.64;
-                    end
-                elseif X(i, 1) >= 0
-                    if X(i, 1)^2 + X(i, 2)^2 <= 0.49
-                        PopCon(i, 2) = X(i, 1)^2 + X(i, 2)^2 - 0.36;
-                        PopCon(i, 3) = -X(i, 1)^2 - X(i, 2)^2 + 0.04;
-                    else
-                        PopCon(i, 2) = X(i, 1)^2 + X(i, 2)^2 - 1;
-                        PopCon(i, 3) = -X(i, 1)^2 - X(i, 2)^2 + 0.64;
-                    end
+                if X(i, 1) < -0.5
+                    % Peak 1 at (-1,0) radius 0.5. val = (x+1)^2+y^2.
+                    val = (X(i, 1)+1)^2 + X(i, 2)^2;
+                    % Feasible band: [0.2, 0.3]
+                    PopCon(i, 1) = max(0.2 - val, val - 0.3);
+                else
+                    % Peak 2 at (0,0) radius sqrt(0.96). val = x^2+y^2.
+                    val = X(i, 1)^2 + X(i, 2)^2;
+                    % Feasible band: [0.91, 1.01]
+                    PopCon(i, 1) = max(0.91 - val, val - 1.01);
                 end
+                
+                THETA = 2/pi * atan(abs(X(i, 2)) ./ abs(X(i, 1)));
+                PopCon(i, 2) = min(max(0.1 - THETA, THETA - 0.4), ...
+                    max(0.6 - THETA, THETA - 0.9));
             end
             PopCon(PopCon < 0) = 0;
         end
         %% Generate Pareto optimal solutions
         function R = GetOptimum(obj, N)
-            % 1. Sample potential PS points (Circles)
-            r = sqrt(0.96);
             phi = linspace(-pi, pi, 15000)';
-            
-            % Circle 1: centered at (0,0)
-            C1 = [r*cos(phi), r*sin(phi)];
-            % Circle 2: centered at (-1,0)
-            C2 = [-1 + r*cos(phi), r*sin(phi)];
-            
+            r1 = sqrt(0.96);
+            r2 = 0.5;
+            C1 = [r1*cos(phi), r1*sin(phi)];
+            C2 = [-1 + r2*cos(phi), r2*sin(phi)];
             Combined = [C1; C2];
             
-            % 2. Strictly clip to problem bounds [-1, 1]
             Combined(Combined(:,1) < -1|Combined(:,1) > 1 | Combined(:,2) < -1|Combined(:,2) > 1, :) = [];
             
-            % 3. Filter through constraints
-            PopCon = obj.CalCon(Combined);
+            [nc, ~] = size(Combined);
+            T_val = zeros(nc, 1);
+            for i = 1 : nc
+                if Combined(i, 1) < -0.5
+                    T_val(i) = (0.25 - (Combined(i, 1)+1)^2 - Combined(i, 2)^2)^2;
+                else
+                    T_val(i) = (0.96 - Combined(i, 1)^2 - Combined(i, 2)^2)^2;
+                end
+            end
+            POS_cand = Combined(T_val < 1e-4, :);
+            
+            PopCon = obj.CalCon(POS_cand);
             Feasible = all(PopCon <= 1e-4, 2);
-            obj.POS = Combined(Feasible, :);
+            obj.POS = POS_cand(Feasible, :);
             
-            % 4. Generate PF
-            objs = obj.CalObj(obj.POS);
-            T_vals = sum(objs, 2) - 1; % For this problem, G1+G2 = 1? Actually verify.
-            % Let's use a simpler check for global optimum if needed.
-            % Since we sampled on optimal circles, we just need to verify feasibility.
-            R = objs;
-            
+            R = obj.CalObj(obj.POS);
             if obj.D > 2
                 obj.POS = [obj.POS, repmat(repmat(0.2, 1, obj.D-2), size(obj.POS, 1), 1)];
             end

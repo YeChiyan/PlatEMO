@@ -3,8 +3,8 @@ clear; clc;
 %% 含义
 %% 1. 参数设置区域
 algName  = 'DCMMEAHA'; % 算法名称 (指向 Algorithms 文件夹中的类)
-probName = 'CMMF11';    % 目标函数名称
-popSize  = 200;
+probName = 'CMMF7';    % 目标函数名称
+popSize  = 400;
 iters =100;
 maxFE    = popSize * iters;
 savePts  = 20;

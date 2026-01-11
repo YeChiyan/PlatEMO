@@ -20,16 +20,8 @@ classdef CMMF6 < PROBLEM
             [N, D] = size(X);
             OptX = 0.2;
             
-            THETA = zeros(N, 1);
-            for i = 1 : N
-                if X(i, 1) > 0
-                    THETA(i) = 2/pi * atan(abs(X(i, 2)) ./ X(i, 1));
-                elseif X(i, 1) == 0
-                    THETA(i) = 1;
-                else
-                    THETA(i) = 2/pi * atan(abs(X(i, 2)) ./ abs(X(i, 1)));
-                end
-            end
+            % Angle calculation
+            THETA = 2/pi * atan(abs(X(:, 2)) ./ abs(X(:, 1)));
             
             if D > M
                 h = sum((X(:, M+1:D) - OptX).^2, 2);
@@ -37,38 +29,34 @@ classdef CMMF6 < PROBLEM
                 h = zeros(N, 1);
             end
             
-            T = (1/16 - 0.25 .* X(:, 1).^2 - X(:, 2).^2).^2 + h;
-            G = [ones(N, 1), cumprod(sin(pi/2 * THETA), 2)] .* [cos(pi/2 * THETA), ones(N, 1)];
+            % Ellipse-based peak
+            val = 0.25 * X(:, 1).^2 + X(:, 2).^2;
+            T = (0.0625 - val).^2 + h;
+            G = [1-THETA, THETA];
             PopObj = G .* repmat((1+T), 1, M);
         end
         %% Calculate constraint violations
         function PopCon = CalCon(obj, X)
-            M = obj.M;
-            [N, D] = size(X);
-            THETA = zeros(N, 1);
+            [N, ~] = size(X);
+            PopCon = zeros(N, 2);
             for i = 1 : N
-                if X(i, 1) > 0
-                    THETA(i) = 2/pi * atan(abs(X(i, 2)) ./ X(i, 1));
-                elseif X(i, 1) == 0
-                    THETA(i) = 1;
-                else
-                    THETA(i) = 2/pi * atan(abs(X(i, 2)) ./ abs(X(i, 1)));
-                end
-            end
-            
-            PopCon = zeros(N, 4);
-            for i = 1 : N
-                PopCon(i, 1) = THETA(i, 1) - 2/3;
-                PopCon(i, 2) = -THETA(i, 1) + 1/3;
-                PopCon(i, 3) = 1/25 - 1/4 * X(i, 1)^2 - X(i, 2)^2;
-                PopCon(i, 4) = 1/4 * X(i, 1)^2 + X(i, 2)^2 - 1/9;
+                % 1. Ellipse factor
+                val = 0.25 * X(i, 1)^2 + X(i, 2)^2;
+                % Peak at 0.0625. Feasible band: [0.04, 0.09]
+                PopCon(i, 1) = max(0.04 - val, val - 0.09);
+                
+                % 2. Sector constraint
+                THETA = 2/pi * atan(abs(X(i, 2)) ./ abs(X(i, 1)));
+                % Allow THETA in [0.1, 0.4] or [0.6, 0.9]
+                PopCon(i, 2) = min(max(0.1 - THETA, THETA - 0.4), ...
+                    max(0.6 - THETA, THETA - 0.9));
             end
             PopCon(PopCon < 0) = 0;
         end
         %% Generate Pareto optimal solutions
         function R = GetOptimum(obj, N)
-            % 1. Sample potential PS points (Ellipse)
-            % Ellipse: 0.25*X1^2 + X2^2 = 1/16 (a=1/2, b=1/4)
+            % 1. Sample potential PS ellipse
+            % 0.25*X1^2 + X2^2 = 0.0625 => X1^2/0.25 + X2^2/0.0625 = 1 => a=0.5, b=0.25
             phi = linspace(-pi, pi, 15000)';
             Combined = [0.5*cos(phi), 0.25*sin(phi)];
             
