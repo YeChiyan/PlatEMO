@@ -2,6 +2,9 @@ classdef CMMF12 < PROBLEM
     % <multi> <real> <multimodal> <constrained>
     % Constrained multi-modal multi-objective test function
     
+    properties
+        POS;    % Pareto optimal set for IGDX calculation
+    end
     methods
         %% Default settings of the problem
         function Setting(obj)
@@ -80,6 +83,50 @@ classdef CMMF12 < PROBLEM
                 end
             end
             PopCon(PopCon < 0) = 0;
+        end
+        %% Generate Pareto optimal solutions
+        function R = GetOptimum(obj, N)
+            % 1. Sample potential PS points (Ellipse)
+            % Ellipse: X1^2 + 4*X2^2 = 1 (a=1, b=1/2)
+            phi = linspace(-pi, pi, 15000)';
+            Combined = [cos(phi), 0.5*sin(phi)];
+            
+            % 2. Clip to bounds
+            Combined(Combined(:,1) < -1|Combined(:,1) > 1 | Combined(:,2) < -1|Combined(:,2) > 1, :) = [];
+            
+            % 3. Filter through constraints
+            PopCon = obj.CalCon(Combined);
+            Feasible = all(PopCon <= 1e-4, 2);
+            obj.POS = Combined(Feasible, :);
+            
+            % 4. Generate PF
+            objs = obj.CalObj(obj.POS);
+            R = objs;
+            
+            if obj.D > 2
+                obj.POS = [obj.POS, repmat(repmat(0.2, 1, obj.D-2), size(obj.POS, 1), 1)];
+            end
+        end
+        %% Generate the image of Pareto front
+        function R = GetPF(obj)
+            if isempty(obj.POS)
+                obj.GetOptimum(1000);
+            end
+            R = obj.CalObj(obj.POS);
+            [~, idx] = sort(R(:, 1));
+            R = R(idx, :);
+        end
+        %% Calculate the metric value
+        function score = CalMetric(obj, metName, Population)
+            if isempty(obj.POS)
+                obj.GetOptimum(2000);
+            end
+            switch metName
+                case 'IGDX'
+                    score = feval(metName, Population, obj.POS);
+                otherwise
+                    score = feval(metName, Population, obj.CalObj(obj.POS));
+            end
         end
     end
 end

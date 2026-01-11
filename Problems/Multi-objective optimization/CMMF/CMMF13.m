@@ -2,6 +2,9 @@ classdef CMMF13 < PROBLEM
     % <multi> <real> <multimodal> <constrained>
     % Constrained multi-modal multi-objective test function
     
+    properties
+        POS;    % Pareto optimal set for IGDX calculation
+    end
     methods
         %% Default settings of the problem
         function Setting(obj)
@@ -47,7 +50,7 @@ classdef CMMF13 < PROBLEM
                 elseif X(i, 1) >= 0 && X(i, 2) < 0
                     T(i) = (0.09 - Sx(i, 1)).^2 + h(i);
                 end
-                G(i, :) = [ones(1, 1), cumprod(THETA(i), 2)] .* [1-THETA(i), 1];
+                G(i, :) = [1, cumprod(THETA(i), 2)] .* [1-THETA(i), 1];
             end
             PopObj = G .* repmat((1+T), 1, M);
         end
@@ -95,6 +98,52 @@ classdef CMMF13 < PROBLEM
                 end
             end
             PopCon(PopCon < 0) = 0;
+        end
+        %% Generate Pareto optimal solutions
+        function R = GetOptimum(obj, N)
+            % 1. Sample potential PS points (Circles)
+            r1 = sqrt(0.64);
+            r2 = sqrt(0.36);
+            r3 = sqrt(0.09);
+            phi = linspace(-pi, pi, 15000)';
+            Combined = [r1*cos(phi), r1*sin(phi); r2*cos(phi), r2*sin(phi); r3*cos(phi), r3*sin(phi)];
+            
+            % 2. Clip to bounds
+            Combined(Combined(:,1) < -1|Combined(:,1) > 1 | Combined(:,2) < -1|Combined(:,2) > 1, :) = [];
+            
+            % 3. Filter through constraints
+            PopCon = obj.CalCon(Combined);
+            Feasible = all(PopCon <= 1e-4, 2);
+            obj.POS = Combined(Feasible, :);
+            
+            % 4. Generate PF
+            objs = obj.CalObj(obj.POS);
+            R = objs;
+            
+            if obj.D > 2
+                obj.POS = [obj.POS, repmat(repmat(0.2, 1, obj.D-2), size(obj.POS, 1), 1)];
+            end
+        end
+        %% Generate the image of Pareto front
+        function R = GetPF(obj)
+            if isempty(obj.POS)
+                obj.GetOptimum(1000);
+            end
+            R = obj.CalObj(obj.POS);
+            [~, idx] = sort(R(:, 1));
+            R = R(idx, :);
+        end
+        %% Calculate the metric value
+        function score = CalMetric(obj, metName, Population)
+            if isempty(obj.POS)
+                obj.GetOptimum(2000);
+            end
+            switch metName
+                case 'IGDX'
+                    score = feval(metName, Population, obj.POS);
+                otherwise
+                    score = feval(metName, Population, obj.CalObj(obj.POS));
+            end
         end
     end
 end

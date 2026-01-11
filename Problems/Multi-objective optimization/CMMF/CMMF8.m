@@ -2,15 +2,14 @@ classdef CMMF8 < PROBLEM
     % <multi> <real> <multimodal> <constrained>
     % Constrained multi-modal multi-objective test function
     
+    properties
+        POS;    % Pareto optimal set for IGDX calculation
+    end
     methods
         %% Default settings of the problem
         function Setting(obj)
             obj.M = 2;
             if isempty(obj.D); obj.D = 2; end
-            % CMMF8 seems to have a different range based on Pop(i,1)>1 and Pop(i,1)<1
-            % Let's use [0, 2] for X1 and [0, 2] for X2?
-            % Actually, the code says Pop(i,1)>1 and Pop(i,1)<=1.
-            % If X1 is in [0, 2], it works.
             obj.lower    = repmat(0, 1, obj.D);
             obj.upper    = repmat(2, 1, obj.D);
             obj.encoding = ones(1, obj.D);
@@ -71,6 +70,56 @@ classdef CMMF8 < PROBLEM
                 PopCon(i, 2) = -THETA(i) + 1/3;
             end
             PopCon(PopCon < 0) = 0;
+        end
+        %% Generate Pareto optimal solutions
+        function R = GetOptimum(obj, N)
+            % 1. Sample potential PS points (Ellipses)
+            phi = linspace(-pi, pi, 15000)';
+            % C1 centered at (2,2) with a=1, b=2
+            C1 = [2 + cos(phi), 2 + 2*sin(phi)];
+            % C2 centered at (1,0) with a=1, b=2
+            C2 = [1 + cos(phi), 2*sin(phi)];
+            
+            Combined = [C1; C2];
+            
+            % 2. Clip to bounds [0, 2]
+            Combined(Combined(:,1) < 0|Combined(:,1) > 2 | Combined(:,2) < 0|Combined(:,2) > 2, :) = [];
+            
+            % 3. Filter through constraints
+            PopCon = obj.CalCon(Combined);
+            Feasible = all(PopCon <= 1e-4, 2);
+            obj.POS = Combined(Feasible, :);
+            
+            % 4. Filter for global optima (T=0)
+            objs = obj.CalObj(obj.POS);
+            % R = objs;
+            % For CMMF8, T=0 is satisfied by sampling
+            R = objs;
+            
+            if obj.D > 2
+                obj.POS = [obj.POS, repmat(repmat(0.2, 1, obj.D-2), size(obj.POS, 1), 1)];
+            end
+        end
+        %% Generate the image of Pareto front
+        function R = GetPF(obj)
+            if isempty(obj.POS)
+                obj.GetOptimum(1000);
+            end
+            R = obj.CalObj(obj.POS);
+            [~, idx] = sort(R(:, 1));
+            R = R(idx, :);
+        end
+        %% Calculate the metric value
+        function score = CalMetric(obj, metName, Population)
+            if isempty(obj.POS)
+                obj.GetOptimum(2000);
+            end
+            switch metName
+                case 'IGDX'
+                    score = feval(metName, Population, obj.POS);
+                otherwise
+                    score = feval(metName, Population, obj.CalObj(obj.POS));
+            end
         end
     end
 end

@@ -34,12 +34,15 @@ classdef DCMMEAHA < ALGORITHM
             %% Optimization
             while Algorithm.NotTerminated(Archive)
                 
-                MatingPool1 = TournamentSelection(2,len1,D_Dec);
-                MatingPool2 = TournamentSelection(2,len2,D);
+                % --- Improvement: Niche Mating Restriction ---
+                % Using dedicated niche selection to prevent cross-peak mating
+                MatingPool1 = NicheTournamentSelection(Population1, D_Dec, len1, 0.1);
+                MatingPool2 = NicheTournamentSelection(Population2, D, len2, 0.1);
                 
-                % --- Improvement: Archive Feedback Mechanism ---
                 Parents1 = Population1(MatingPool1);
                 Parents2 = Population2(MatingPool2);
+                
+                % --- Archive Feedback Mechanism (Guidance) ---
                 if ~isempty(Archive) && rand < 0.2
                     % Inject archive individuals into mating pool (50% replacement)
                     n1 = length(Parents1);
@@ -84,4 +87,47 @@ classdef DCMMEAHA < ALGORITHM
             end
         end
     end
+end
+
+function MatingPool = NicheTournamentSelection(Population, Fitness, N, Sigma)
+% Population: 当前种群 (INDIVIDUAL 数组)
+% Fitness: 适应度/多样性评分 (D_Dec 或 D)，这里数值越小代表多样性越好 (密度越低)
+% N: 需要选出的亲本数量
+% Sigma: 小生境半径比例 (例如 0.1 代表种群中最靠近的 10% 个体)
+
+MatingPool = zeros(1, N);
+PopDec = Population.decs;
+PopSize = length(Population);
+
+% 确定邻域大小 (小生境规模)
+nicheSize = max(2, ceil(PopSize * Sigma));
+
+for i = 1 : 2 : N
+    % 1. 锦标赛选出第一个亲本 (P1)
+    candidates = randi(PopSize, 1, 2);
+    if Fitness(candidates(1)) < Fitness(candidates(2))
+        p1Idx = candidates(1);
+    else
+        p1Idx = candidates(2);
+    end
+    MatingPool(i) = p1Idx;
+    
+    % 2. 如果还需要选第二个亲本，则在 P1 的邻域内寻找
+    if i + 1 <= N
+        % 计算 P1 到所有人的距离
+        distances = pdist2(PopDec(p1Idx, :), PopDec);
+        [~, sortedIdx] = sort(distances);
+        
+        % 3. 在邻域内通过锦标赛选出第二个亲本 (P2)
+        nicheIndices = sortedIdx(1:nicheSize);
+        c2 = nicheIndices(randi(nicheSize, 1, 2));
+        
+        if Fitness(c2(1)) < Fitness(c2(2))
+            p2Idx = c2(1);
+        else
+            p2Idx = c2(2);
+        end
+        MatingPool(i+1) = p2Idx;
+    end
+end
 end
