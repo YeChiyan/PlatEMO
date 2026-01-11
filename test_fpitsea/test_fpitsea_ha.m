@@ -4,8 +4,8 @@ clear; clc;
 %% 1. 参数设置区域
 algName  = 'FPITSEAHA'; % 算法名称 (指向 Algorithms 文件夹中的类)
 probName = 'MMF10';    % 目标函数名称
-popSize  = 200;
-iters =100;
+popSize  = 600;
+iters =200;
 maxFE    = popSize * iters;
 savePts  = 20;
 
