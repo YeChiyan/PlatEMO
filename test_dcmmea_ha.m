@@ -1,15 +1,15 @@
-%% DCMMEA 历史档案 算法演化过程展示脚本
+%% DCMMEA-HA 历史档案 算法演化过程展示脚本
 clear; clc;
 %% 含义
 %% 1. 参数设置区域
-algName  = 'DCMMEA'; % 算法名称 (指向 Algorithms 文件夹中的类)
+algName  = 'DCMMEAHA'; % 算法名称 (指向 Algorithms 文件夹中的类)
 probName = 'CMMF1';    % 目标函数名称
 popSize  = 400;
 iters =100;
 maxFE    = popSize * iters;
 savePts  = 20;
 
-str='原始 DCCMEA，无档案机制';
+str='引入档案机制';
 
 
 % 动画速度
